@@ -18,7 +18,7 @@ BACKUP_LOCATION="/backup"
 # Place for logs.
 LOG_PATH="/var/log/backup.log"
 
-# backup.conf file should contain the '\n' separated list of files/directories for backup.
+# backup.conf file should contain the '\n' separated list of files/directories for the backup.
 CONFIG_FILE="${HOME}/.config/backup.conf"
 
 # Directory for the backup
@@ -34,6 +34,8 @@ function check_config {
 
 function check_backup_server {
 
+	[ -z ${BACKUP_SERVER} ] && echo "Variable BACKUP_SERVER is empty" && exit 1
+
 	# Get IP of the backup server.
 	BACKUP_SERVER_IP=$(
 		grep "Host" ~/.ssh/config | 
@@ -48,6 +50,8 @@ function check_backup_server {
 		}' | 
 		grep -o "[0-9\.]\+"
 	)	
+
+	[ -z ${BACKUP_SERVER_IP} ] && echo "${BACKUP_SERVER}: No such a host in the ~/.ssh/config" && exit 1
 	
 	# Check connectivity with the server.
 	ping -q -c 1 -W 1 "${BACKUP_SERVER_IP}" > /dev/null
@@ -72,7 +76,7 @@ function check_backup_server {
 
 		fi
 	else
-		echo "No connection with host ${BACKUP_SERVER}"
+		echo "No connection with the ${BACKUP_SERVER}"
 		exit 1
 	fi
 }
