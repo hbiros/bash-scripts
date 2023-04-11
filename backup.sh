@@ -9,14 +9,14 @@
 #	                            |_|               
 
 
-# Hostname of the backup server. Entry in the ~/.ssh/config is required.
+# Hostname of the backup server. Entry in the ${HOME}/.ssh/config is required.
 BACKUP_SERVER=""
 
 # Backup target directiory on the backup server.
 BACKUP_LOCATION="/backup"
 
 # Place for logs.
-LOG_PATH="/var/log/backup.log"
+LOG_FILE="/var/log/backup.log"
 
 # backup.conf file should contain the '\n' separated list of files/directories for the backup.
 CONFIG_FILE="${HOME}/.config/backup.conf"
@@ -28,17 +28,20 @@ function check_config {
 	if [ ! -s ${CONFIG_FILE} ]
 	then
 		echo "${CONFIG_FILE} does not exist"
+		echo "[$(date)] Performing the backup: Failure" >> ${LOG_FILE}
 		exit 1
 	fi
 }
 
 function check_backup_server {
-
-	[ -z ${BACKUP_SERVER} ] && echo "Variable BACKUP_SERVER is empty" && exit 1
+	[ -z ${BACKUP_SERVER} ] && 
+	echo "Variable BACKUP_SERVER is empty" && 
+	echo "[$(date)] Performing the backup: Failure" >> ${LOG_FILE} && 
+	exit 1
 
 	# Get IP of the backup server.
 	BACKUP_SERVER_IP=$(
-		grep "Host" ~/.ssh/config | 
+		grep "Host" ${HOME}/.ssh/config | 
 		awk -v host="Host ${BACKUP_SERVER}" '{
 			if(flag==1){
 				print $0
@@ -51,7 +54,10 @@ function check_backup_server {
 		grep -o "[0-9\.]\+"
 	)	
 
-	[ -z ${BACKUP_SERVER_IP} ] && echo "${BACKUP_SERVER}: No such a host in the ~/.ssh/config" && exit 1
+	[ -z ${BACKUP_SERVER_IP} ] &&
+	echo "${BACKUP_SERVER}: No such a host in the ${HOME}/.ssh/config" &&
+	echo "[$(date)] Performing the backup: Failure" >> ${LOG_FILE} &&
+	exit 1
 	
 	# Check connectivity with the server.
 	ping -q -c 1 -W 1 "${BACKUP_SERVER_IP}" > /dev/null
@@ -82,17 +88,18 @@ function check_backup_server {
 }
 
 function do_the_backup {
-	backup_files=$(cat ${CONFIG_FILE})
+	echo "[$(date)] Performing the backup: Start" >> ${LOG_FILE}
 	while read -r backup_file
 	do
 		echo "Creating backup of ${backup_file}"
 		file_name=$(basename "${backup_file}")
 		tar -cf - --absolute-names "${backup_file}" 2>&1 | pv -s "$(du -sb "${backup_file}"| awk '{print $1}')" | xz > "/tmp/${file_name}.tar.xz"
-		echo "Moving ${file_name} to the backup server."
+		echo "Moving ${file_name}.tar.xz to the backup server."
 		scp "/tmp/${file_name}.tar.xz" "${BACKUP_SERVER}:${BACKUP_LOCATION}/${BACKUP_FOLDER}"
 		rm -rf "/tmp/${file_name}.tar.xz"
 	done < "$CONFIG_FILE"
 	echo "Done!"
+	echo "[$(date)] Performing the backup: Success" >> ${LOG_FILE}
 }
 
 check_config
